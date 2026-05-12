@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>多頁式圓形專案設計器 (A4列印版)</title>
+    <title>多頁式圓形專案設計器 (支援 GitHub 圖庫載入與 A4列印)</title>
     <style>
         :root {
             --primary-color: #4a90e2;
@@ -34,6 +34,7 @@
             padding: 20px 10px;
             flex-shrink: 0;
             z-index: 100;
+            box-sizing: border-box;
         }
 
         .sidebar-title {
@@ -76,6 +77,8 @@
             cursor: pointer;
             font-weight: bold;
             margin-top: auto;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         /* 中間畫布區 */
@@ -92,7 +95,7 @@
             background-size: 20px 20px;
         }
 
-        /* 圓形物件樣式 (去除所有實體 border 確保尺寸絕對精準) */
+        /* 圓形物件樣式 */
         .circle-obj {
             border-radius: 50%;
             position: relative;
@@ -105,7 +108,7 @@
             container-type: inline-size;
         }
 
-        /* 選取時改用 outline 虛線浮動標示，不佔據實體邊框空間 */
+        /* 選取標示採用 outline 不佔據實體尺寸空間 */
         .circle-obj.selected {
             outline: 3px dashed var(--primary-color);
             outline-offset: 4px;
@@ -120,7 +123,7 @@
             background-image: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
 
-        /* 文字顯示區塊 (依需求移除 border 框線) */
+        /* 文字顯示區塊 (無邊線固定比例樣式) */
         .text-overlay {
             position: absolute;
             top: 68%; left: 50%;
@@ -160,8 +163,8 @@
         .control-group { display: flex; flex-direction: column; gap: 5px; }
         label { font-size: 12px; font-weight: bold; color: #666; }
         
-        input[type="text"], input[type="number"], input[type="file"] {
-            padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
+        input[type="text"], input[type="number"], input[type="file"], select {
+            padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; width: 100%; box-sizing: border-box;
         }
 
         .range-box { display: flex; align-items: center; gap: 10px; }
@@ -169,24 +172,23 @@
         .range-val { width: 40px; font-size: 12px; font-weight: bold; color: var(--primary-color); text-align: right; }
 
         .btn-danger { background: #e74c3c; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
-        .btn-action { padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; font-size: 13px; transition: opacity 0.2s; text-align: center; }
+        .btn-action { padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; font-size: 13px; transition: opacity 0.2s; text-align: center; width: 100%; box-sizing: border-box; }
         .btn-action:hover { opacity: 0.9; }
         
         .btn-add-circle { background: var(--secondary-color); }
         .btn-print { background: #e67e22; font-size: 14px; padding: 12px; }
-        .btn-apply-all { background: #3498db; font-size: 12px; padding: 6px; margin-top: 2px; }
+        .btn-apply-all { background: #3498db; font-size: 12px; padding: 6px; margin-top: 4px; }
         .btn-json-export { background: #34495e; }
         .btn-json-import { background: #9b59b6; }
 
         .no-selection-msg { color: #999; text-align: center; margin-top: 50px; font-style: italic; font-size: 14px; }
         #importFile { display: none; }
 
-        /* 列印專用隱藏區 (平常在螢幕上不顯示) */
+        /* 列印專用區 */
         #print-area { display: none; }
 
         /* ================= 🖨️ A4 專屬列印排版引擎 ================= */
         @media print {
-            /* 隱藏所有操作 UI 與原本的滾动画布 */
             body > :not(#print-area) { display: none !important; }
             
             body, html {
@@ -197,21 +199,20 @@
                 height: auto !important;
             }
 
-            /* 顯示專門生成的列印區域 */
             #print-area { 
                 display: block !important; 
                 width: 100% !important;
             }
 
-            /* 設定每一頁都是標準 A4 大小容器 */
+            /* 設定每頁標準 A4 容器 (2排 x 4列) */
             .print-page {
                 width: 21cm;
                 height: 29.7cm;
-                padding: 1.5cm 1cm; /* 上下左右留邊距 */
+                padding: 1.5cm 1cm;
                 box-sizing: border-box;
                 display: grid !important;
-                grid-template-columns: repeat(2, 1fr); /* 2 行 */
-                grid-template-rows: repeat(4, 1fr);    /* 4 列 */
+                grid-template-columns: repeat(2, 1fr);
+                grid-template-rows: repeat(4, 1fr);
                 align-items: center;
                 justify-items: center;
                 page-break-after: always;
@@ -219,19 +220,16 @@
                 background: white;
             }
 
-            /* 列印時強制渲染背景色彩與圖片 */
             * {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
 
-            /* 列印時強制取消圓形的陰影與選取效果 */
             #print-area .circle-obj {
                 box-shadow: none !important;
                 outline: none !important;
             }
             
-            /* 設定印表機實體紙張邊界無邊距，全權由 .print-page 控制排版 */
             @page {
                 size: A4 portrait;
                 margin: 0;
@@ -288,13 +286,20 @@
                 </div>
             </div>
 
-            <div class="control-group">
-                <label>載入底圖</label>
+            <div class="control-group" style="margin-top: 5px;">
+                <label>載入底圖 (本機上傳)</label>
                 <input type="file" id="inpImageFile" accept="image/*" onchange="updateCircleImage(this)">
-                <button class="btn-action btn-apply-all" onclick="applyBgToAll()">套用此底圖至本頁所有圓形</button>
             </div>
 
             <div class="control-group">
+                <label>載入底圖 (GitHub 線上圖庫)</label>
+                <select id="selGithubImage" onchange="loadGithubImage(this.value)">
+                    <option value="">-- 讀取線上圖檔清單中... --</option>
+                </select>
+                <button class="btn-action btn-apply-all" onclick="applyBgToAll()">套用此底圖至本頁所有圓形</button>
+            </div>
+
+            <div class="control-group" style="margin-top: 5px;">
                 <label>底圖透明度</label>
                 <div class="range-box">
                     <input type="range" id="inpBgOpacity" min="0" max="100" oninput="updateActiveCircle('bgOpacity', this.value)">
@@ -335,10 +340,11 @@
         let activePageId = project.pages[0].id;
         let activeCircleId = null;
 
-        // 初始化載入並預設給定一個圓形
+        // 初始化載入
         window.onload = () => {
             addNewCircle();
             renderAll();
+            fetchGithubRepoImages(); // 啟動背景動態載入 GitHub 圖檔列表
         };
 
         function renderAll() {
@@ -347,11 +353,71 @@
             renderPanel();
         }
 
+        // ================= GitHub 線上圖檔抓取引擎 =================
+        async function fetchGithubRepoImages() {
+            const select = document.getElementById('selGithubImage');
+            try {
+                // 透過 GitHub 官方 REST API 取得儲存庫檔案資訊
+                const apiUrl = 'https://api.github.com/repos/tpectim/circlemaker/contents';
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const files = await response.json();
+
+                // 篩選檔案格式為 png, jpg, jpeg 的檔案
+                const imageFiles = files.filter(file => 
+                    file.type === 'file' && /\.(png|jpe?g)$/i.test(file.name)
+                );
+
+                select.innerHTML = '<option value="">-- 請選擇 GitHub 線上圖檔 --</option>';
+
+                if (imageFiles.length === 0) {
+                    select.innerHTML = '<option value="">-- 目錄下尚未建立合適的圖檔 --</option>';
+                    select.disabled = true;
+                    return;
+                }
+
+                imageFiles.forEach(file => {
+                    const opt = document.createElement('option');
+                    opt.value = file.download_url; // 指向 GitHub raw 下載端點
+                    opt.innerText = file.name;
+                    select.appendChild(opt);
+                });
+
+            } catch (error) {
+                console.error("無法連線至 GitHub 獲取圖片清單:", error);
+                select.innerHTML = '<option value="">-- 讀取清單失敗 (請檢查網路或儲存庫) --</option>';
+            }
+        }
+
+        // 下拉選單選擇載入 GitHub 圖檔
+        async function loadGithubImage(url) {
+            if (!url) return;
+            const circle = getActiveCircleData();
+            if (!circle) return;
+
+            try {
+                // 自動下載圖片並轉成 Base64 字串，保證匯出 JSON 時完全不受外連限制
+                const response = await fetch(url);
+                const blob = await response.blob();
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    updateActiveCircle('image', e.target.result);
+                };
+                reader.readAsDataURL(blob);
+            } catch (err) {
+                console.error("Base64 轉譯失敗，降級直接寫入線上 URL:", err);
+                updateActiveCircle('image', url);
+            }
+
+            // 選取完畢後，自動將下拉選單重置，確保點選同圖檔時能再次觸發 onchange 事件
+            document.getElementById('selGithubImage').value = '';
+        }
+
         // ================= 分頁 UI 控制 =================
         function renderSidebar() {
             const list = document.getElementById('page-list');
             list.innerHTML = '';
-            project.pages.forEach((page, index) => {
+            project.pages.forEach((page) => {
                 const div = document.createElement('div');
                 div.className = `page-item ${page.id === activePageId ? 'active' : ''}`;
                 div.onclick = () => {
@@ -374,7 +440,6 @@
             project.pages.push(newPage);
             activePageId = newPage.id;
             activeCircleId = null;
-            // 自動在新頁面建立一個預設圓形
             addNewCircle();
             renderAll();
         }
@@ -426,9 +491,8 @@
 
         function addNewCircle() {
             const currentPage = project.pages.find(p => p.id === activePageId);
-            // 限制單頁數量避免無限新增，A4排版建議單頁不超過 16或24個
             if (currentPage.circles.length >= 24) {
-                alert("本頁物件數量已達上限，建議新增分頁進行設計！");
+                alert("本頁物件數量已達排版上限，建議新增分頁進行設計！");
                 return;
             }
             const newCircle = {
@@ -446,20 +510,19 @@
             renderAll();
         }
 
-        // 複製當前選中的圓形
         function duplicateSelectedCircle() {
             const currentPage = project.pages.find(p => p.id === activePageId);
             const source = currentPage.circles.find(c => c.id === activeCircleId);
             if (!source) return;
 
             if (currentPage.circles.length >= 24) {
-                alert("本頁物件數量已達上限！");
+                alert("本頁物件數量已達排版上限！");
                 return;
             }
 
             const cloned = {
                 ...source,
-                id: Date.now() // 賦予獨立新 ID
+                id: Date.now() 
             };
             currentPage.circles.push(cloned);
             activeCircleId = cloned.id;
@@ -484,7 +547,6 @@
         function renderPanel() {
             const settings = document.getElementById('circle-settings');
             const noSel = document.getElementById('no-selection');
-            // 清空 file input 防止相同檔案無法二次觸發 change
             document.getElementById('inpImageFile').value = ''; 
 
             if (!activeCircleId) {
@@ -526,7 +588,6 @@
             if (key === 'bgSaturate') document.getElementById('valBgSaturate').innerText = val + '%';
 
             renderCanvas();
-            // 同步更新左側分頁項目上的計數器
             renderSidebar();
         }
 
@@ -541,12 +602,11 @@
             }
         }
 
-        // 將當前選定圓形的底圖，套用到本頁面的所有圓形
         function applyBgToAll() {
             const currentCircle = getActiveCircleData();
             if (!currentCircle) return;
             if (!currentCircle.image) {
-                alert("當前圓形尚未載入任何底圖！");
+                alert("當前選取的圓形尚未載入任何底圖！");
                 return;
             }
             
@@ -570,19 +630,16 @@
             }
 
             const printArea = document.getElementById('print-area');
-            printArea.innerHTML = ''; // 清空先前的暫存
+            printArea.innerHTML = ''; 
 
-            // 將物件以每 8 個為一組 (2x4) 進行分頁切塊
             const chunkSize = 8;
             for (let i = 0; i < circles.length; i += chunkSize) {
                 const chunk = circles.slice(i, i + chunkSize);
                 
-                // 建立一張獨立的標準 A4 頁面容器
                 const pageDiv = document.createElement('div');
                 pageDiv.className = 'print-page';
 
                 chunk.forEach(circle => {
-                    // 重新建構純淨無邊框的 DOM 結構供印表機讀取
                     const cDiv = document.createElement('div');
                     cDiv.className = 'circle-obj';
                     cDiv.style.width = `${circle.diameter}cm`;
@@ -607,7 +664,6 @@
                 printArea.appendChild(pageDiv);
             }
 
-            // 觸發系統列印對話框
             window.print();
         }
 
@@ -616,7 +672,7 @@
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(project));
             const dlAnchor = document.createElement('a');
             dlAnchor.setAttribute("href", dataStr);
-            dlAnchor.setAttribute("download", "circles_a4_project.json");
+            dlAnchor.setAttribute("download", "circlemaker_project.json");
             document.body.appendChild(dlAnchor);
             dlAnchor.click();
             dlAnchor.remove();
