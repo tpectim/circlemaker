@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多頁式圓形專案設計器 (A4列印版)</title>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #48bb78;
+            --bg-color: #f0f2f5;
+            --panel-bg: #ffffff;
+            --text-color: #333;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ================= 螢幕顯示區域樣式 ================= */
+        
+        /* 左側分頁選單 */
+        #sidebar {
+            width: 220px;
+            background: #2c3e50;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            padding: 20px 10px;
+            flex-shrink: 0;
+            z-index: 100;
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-align: center;
+            border-bottom: 1px solid #3e4f5f;
+            padding-bottom: 10px;
+        }
+
+        .page-item {
+            padding: 12px;
+            margin-bottom: 5px;
+            background: #34495e;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: 0.2s;
+            font-size: 14px;
+        }
+
+        .page-item.active {
+            background: var(--primary-color);
+            font-weight: bold;
+        }
+
+        .page-item:hover:not(.active) {
+            background: #4e6a85;
+        }
+
+        .btn-add-page {
+            background: #1abc9c;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: auto;
+        }
+
+        /* 中間畫布區 */
+        #main-canvas {
+            flex-grow: 1;
+            padding: 40px;
+            overflow: auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+            align-content: flex-start;
+            justify-content: center;
+            background-image: radial-gradient(#d1d1d1 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        /* 圓形物件樣式 (去除所有實體 border 確保尺寸絕對精準) */
+        .circle-obj {
+            border-radius: 50%;
+            position: relative;
+            background-color: #333;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            overflow: hidden;
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: transform 0.2s;
+            container-type: inline-size;
+        }
+
+        /* 選取時改用 outline 虛線浮動標示，不佔據實體邊框空間 */
+        .circle-obj.selected {
+            outline: 3px dashed var(--primary-color);
+            outline-offset: 4px;
+            transform: scale(1.01);
+        }
+
+        .bg-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-size: cover;
+            background-position: center;
+            background-image: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        /* 文字顯示區塊 (依需求移除 border 框線) */
+        .text-overlay {
+            position: absolute;
+            top: 68%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 75cqi; height: 12cqi;
+            line-height: 12cqi;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 3cqi;
+            font-size: 5.5cqi;
+            text-align: center;
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            z-index: 10;
+            padding: 0 3cqi;
+            box-sizing: border-box;
+            color: #000;
+        }
+
+        /* 右側控制面板 */
+        #control-panel {
+            width: 320px;
+            background: var(--panel-bg);
+            border-left: 1px solid #ddd;
+            padding: 20px;
+            overflow-y: auto;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-sizing: border-box;
+        }
+
+        h3 { margin: 0 0 5px 0; font-size: 16px; border-bottom: 2px solid var(--primary-color); padding-bottom: 5px; color: #333; }
+        
+        .control-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-size: 12px; font-weight: bold; color: #666; }
+        
+        input[type="text"], input[type="number"], input[type="file"] {
+            padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
+        }
+
+        .range-box { display: flex; align-items: center; gap: 10px; }
+        .range-box input { flex-grow: 1; }
+        .range-val { width: 40px; font-size: 12px; font-weight: bold; color: var(--primary-color); text-align: right; }
+
+        .btn-danger { background: #e74c3c; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .btn-action { padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; font-size: 13px; transition: opacity 0.2s; text-align: center; }
+        .btn-action:hover { opacity: 0.9; }
+        
+        .btn-add-circle { background: var(--secondary-color); }
+        .btn-print { background: #e67e22; font-size: 14px; padding: 12px; }
+        .btn-apply-all { background: #3498db; font-size: 12px; padding: 6px; margin-top: 2px; }
+        .btn-json-export { background: #34495e; }
+        .btn-json-import { background: #9b59b6; }
+
+        .no-selection-msg { color: #999; text-align: center; margin-top: 50px; font-style: italic; font-size: 14px; }
+        #importFile { display: none; }
+
+        /* 列印專用隱藏區 (平常在螢幕上不顯示) */
+        #print-area { display: none; }
+
+        /* ================= 🖨️ A4 專屬列印排版引擎 ================= */
+        @media print {
+            /* 隱藏所有操作 UI 與原本的滾动画布 */
+            body > :not(#print-area) { display: none !important; }
+            
+            body, html {
+                background: white !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+            }
+
+            /* 顯示專門生成的列印區域 */
+            #print-area { 
+                display: block !important; 
+                width: 100% !important;
+            }
+
+            /* 設定每一頁都是標準 A4 大小容器 */
+            .print-page {
+                width: 21cm;
+                height: 29.7cm;
+                padding: 1.5cm 1cm; /* 上下左右留邊距 */
+                box-sizing: border-box;
+                display: grid !important;
+                grid-template-columns: repeat(2, 1fr); /* 2 行 */
+                grid-template-rows: repeat(4, 1fr);    /* 4 列 */
+                align-items: center;
+                justify-items: center;
+                page-break-after: always;
+                break-after: page;
+                background: white;
+            }
+
+            /* 列印時強制渲染背景色彩與圖片 */
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            /* 列印時強制取消圓形的陰影與選取效果 */
+            #print-area .circle-obj {
+                box-shadow: none !important;
+                outline: none !important;
+            }
+            
+            /* 設定印表機實體紙張邊界無邊距，全權由 .print-page 控制排版 */
+            @page {
+                size: A4 portrait;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <div class="sidebar-title">設計專案</div>
+        <div id="page-list"></div>
+        <button class="btn-add-page" onclick="addNewPage()">＋ 新增分頁</button>
+    </div>
+
+    <div id="main-canvas" onclick="deselectAll(event)"></div>
+
+    <div id="print-area"></div>
+
+    <div id="control-panel">
+        <h3>分頁專案管理</h3>
+        <button class="btn-action btn-print" onclick="printCurrentPage()">🖨️ 列印本頁 (A4 2x4)</button>
+        <button class="btn-action btn-add-circle" onclick="addNewCircle()">＋ 新增單一圓形</button>
+        
+        <div style="display: flex; gap: 5px;">
+            <button class="btn-action btn-json-export" onclick="exportProject()" style="flex:1">匯出 JSON</button>
+            <label class="btn-action btn-json-import" style="flex:1;">匯入 JSON <input type="file" id="importFile" accept=".json" onchange="importProject(event)"></label>
+        </div>
+
+        <div id="circle-settings" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; border-bottom: 2px solid var(--primary-color); padding-bottom: 5px;">
+                <h3 style="margin:0; border:none; color:var(--primary-color);">物件設定</h3>
+                <div style="display: flex; gap: 5px;">
+                    <button class="btn-danger" style="background:#f39c12;" onclick="duplicateSelectedCircle()">複製物件</button>
+                    <button class="btn-danger" onclick="deleteSelectedCircle()">刪除</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>顯示文字</label>
+                <input type="text" id="inpText" oninput="updateActiveCircle('text', this.value)">
+            </div>
+
+            <div class="control-group">
+                <label>圓直徑 (cm)</label>
+                <input type="number" id="inpDiameter" step="0.5" min="1" max="12" oninput="updateActiveCircle('diameter', this.value)">
+            </div>
+
+            <div class="control-group">
+                <label>文字區透明度</label>
+                <div class="range-box">
+                    <input type="range" id="inpTextOpacity" min="0" max="100" oninput="updateActiveCircle('textOpacity', this.value)">
+                    <span class="range-val" id="valTextOpacity">70%</span>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>載入底圖</label>
+                <input type="file" id="inpImageFile" accept="image/*" onchange="updateCircleImage(this)">
+                <button class="btn-action btn-apply-all" onclick="applyBgToAll()">套用此底圖至本頁所有圓形</button>
+            </div>
+
+            <div class="control-group">
+                <label>底圖透明度</label>
+                <div class="range-box">
+                    <input type="range" id="inpBgOpacity" min="0" max="100" oninput="updateActiveCircle('bgOpacity', this.value)">
+                    <span class="range-val" id="valBgOpacity">100%</span>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>底圖色調 (Hue)</label>
+                <div class="range-box">
+                    <input type="range" id="inpBgHue" min="0" max="360" oninput="updateActiveCircle('bgHue', this.value)">
+                    <span class="range-val" id="valBgHue">0°</span>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>底圖飽和度</label>
+                <div class="range-box">
+                    <input type="range" id="inpBgSaturate" min="0" max="200" oninput="updateActiveCircle('bgSaturate', this.value)">
+                    <span class="range-val" id="valBgSaturate">100%</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="no-selection" class="no-selection-msg">
+            請點擊畫布中的圓形進行獨立設定
+        </div>
+    </div>
+
+    <script>
+        // 系統專案狀態
+        let project = {
+            pages: [
+                { id: Date.now(), name: "頁面 1", circles: [] }
+            ]
+        };
+
+        let activePageId = project.pages[0].id;
+        let activeCircleId = null;
+
+        // 初始化載入並預設給定一個圓形
+        window.onload = () => {
+            addNewCircle();
+            renderAll();
+        };
+
+        function renderAll() {
+            renderSidebar();
+            renderCanvas();
+            renderPanel();
+        }
+
+        // ================= 分頁 UI 控制 =================
+        function renderSidebar() {
+            const list = document.getElementById('page-list');
+            list.innerHTML = '';
+            project.pages.forEach((page, index) => {
+                const div = document.createElement('div');
+                div.className = `page-item ${page.id === activePageId ? 'active' : ''}`;
+                div.onclick = () => {
+                    activePageId = page.id;
+                    activeCircleId = null; 
+                    renderAll();
+                };
+                div.innerHTML = `<span>${page.name} (${page.circles.length})</span> 
+                                 <button class="btn-danger" style="padding:2px 6px; font-size:14px;" onclick="deletePage(event, ${page.id})">×</button>`;
+                list.appendChild(div);
+            });
+        }
+
+        function addNewPage() {
+            const newPage = {
+                id: Date.now(),
+                name: `頁面 ${project.pages.length + 1}`,
+                circles: []
+            };
+            project.pages.push(newPage);
+            activePageId = newPage.id;
+            activeCircleId = null;
+            // 自動在新頁面建立一個預設圓形
+            addNewCircle();
+            renderAll();
+        }
+
+        function deletePage(e, id) {
+            e.stopPropagation();
+            if (project.pages.length === 1) return alert("專案中至少需保留一個分頁！");
+            if (confirm("確定要刪除此分頁及裡面的所有設計嗎？")) {
+                project.pages = project.pages.filter(p => p.id !== id);
+                if (activePageId === id) activePageId = project.pages[0].id;
+                activeCircleId = null;
+                renderAll();
+            }
+        }
+
+        // ================= 畫布渲染與物件操作 =================
+        function renderCanvas() {
+            const canvas = document.getElementById('main-canvas');
+            canvas.innerHTML = '';
+            const currentPage = project.pages.find(p => p.id === activePageId);
+
+            currentPage.circles.forEach(circle => {
+                const div = document.createElement('div');
+                div.className = `circle-obj ${circle.id === activeCircleId ? 'selected' : ''}`;
+                div.style.width = `${circle.diameter}cm`;
+                div.style.height = `${circle.diameter}cm`;
+                div.onclick = (e) => {
+                    e.stopPropagation();
+                    activeCircleId = circle.id;
+                    renderAll();
+                };
+
+                const bg = document.createElement('div');
+                bg.className = 'bg-layer';
+                bg.style.opacity = circle.bgOpacity / 100;
+                bg.style.filter = `hue-rotate(${circle.bgHue}deg) saturate(${circle.bgSaturate}%)`;
+                if (circle.image) bg.style.backgroundImage = `url(${circle.image})`;
+
+                const txt = document.createElement('div');
+                txt.className = 'text-overlay';
+                txt.innerText = circle.text;
+                txt.style.backgroundColor = `rgba(255, 255, 255, ${circle.textOpacity / 100})`;
+
+                div.appendChild(bg);
+                div.appendChild(txt);
+                canvas.appendChild(div);
+            });
+        }
+
+        function addNewCircle() {
+            const currentPage = project.pages.find(p => p.id === activePageId);
+            // 限制單頁數量避免無限新增，A4排版建議單頁不超過 16或24個
+            if (currentPage.circles.length >= 24) {
+                alert("本頁物件數量已達上限，建議新增分頁進行設計！");
+                return;
+            }
+            const newCircle = {
+                id: Date.now(),
+                text: "文字顯示區",
+                diameter: 6,
+                textOpacity: 70,
+                bgOpacity: 100,
+                bgHue: 0,
+                bgSaturate: 100,
+                image: ""
+            };
+            currentPage.circles.push(newCircle);
+            activeCircleId = newCircle.id;
+            renderAll();
+        }
+
+        // 複製當前選中的圓形
+        function duplicateSelectedCircle() {
+            const currentPage = project.pages.find(p => p.id === activePageId);
+            const source = currentPage.circles.find(c => c.id === activeCircleId);
+            if (!source) return;
+
+            if (currentPage.circles.length >= 24) {
+                alert("本頁物件數量已達上限！");
+                return;
+            }
+
+            const cloned = {
+                ...source,
+                id: Date.now() // 賦予獨立新 ID
+            };
+            currentPage.circles.push(cloned);
+            activeCircleId = cloned.id;
+            renderAll();
+        }
+
+        function deleteSelectedCircle() {
+            const currentPage = project.pages.find(p => p.id === activePageId);
+            currentPage.circles = currentPage.circles.filter(c => c.id !== activeCircleId);
+            activeCircleId = null;
+            renderAll();
+        }
+
+        function deselectAll(e) {
+            if (e.target.id === 'main-canvas') {
+                activeCircleId = null;
+                renderAll();
+            }
+        }
+
+        // ================= 控制面板同步機制 =================
+        function renderPanel() {
+            const settings = document.getElementById('circle-settings');
+            const noSel = document.getElementById('no-selection');
+            // 清空 file input 防止相同檔案無法二次觸發 change
+            document.getElementById('inpImageFile').value = ''; 
+
+            if (!activeCircleId) {
+                settings.style.display = 'none';
+                noSel.style.display = 'block';
+                return;
+            }
+
+            settings.style.display = 'block';
+            noSel.style.display = 'none';
+
+            const circle = getActiveCircleData();
+            document.getElementById('inpText').value = circle.text;
+            document.getElementById('inpDiameter').value = circle.diameter;
+            document.getElementById('inpTextOpacity').value = circle.textOpacity;
+            document.getElementById('valTextOpacity').innerText = circle.textOpacity + '%';
+            document.getElementById('inpBgOpacity').value = circle.bgOpacity;
+            document.getElementById('valBgOpacity').innerText = circle.bgOpacity + '%';
+            document.getElementById('inpBgHue').value = circle.bgHue;
+            document.getElementById('valBgHue').innerText = circle.bgHue + '°';
+            document.getElementById('inpBgSaturate').value = circle.bgSaturate;
+            document.getElementById('valBgSaturate').innerText = circle.bgSaturate + '%';
+        }
+
+        function getActiveCircleData() {
+            const currentPage = project.pages.find(p => p.id === activePageId);
+            return currentPage.circles.find(c => c.id === activeCircleId);
+        }
+
+        function updateActiveCircle(key, val) {
+            const circle = getActiveCircleData();
+            if (!circle) return;
+
+            circle[key] = (key === 'text' || key === 'image') ? val : parseFloat(val);
+            
+            if (key === 'textOpacity') document.getElementById('valTextOpacity').innerText = val + '%';
+            if (key === 'bgOpacity') document.getElementById('valBgOpacity').innerText = val + '%';
+            if (key === 'bgHue') document.getElementById('valBgHue').innerText = val + '°';
+            if (key === 'bgSaturate') document.getElementById('valBgSaturate').innerText = val + '%';
+
+            renderCanvas();
+            // 同步更新左側分頁項目上的計數器
+            renderSidebar();
+        }
+
+        function updateCircleImage(input) {
+            const file = input.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    updateActiveCircle('image', e.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // 將當前選定圓形的底圖，套用到本頁面的所有圓形
+        function applyBgToAll() {
+            const currentCircle = getActiveCircleData();
+            if (!currentCircle) return;
+            if (!currentCircle.image) {
+                alert("當前圓形尚未載入任何底圖！");
+                return;
+            }
+            
+            const currentPage = project.pages.find(p => p.id === activePageId);
+            currentPage.circles.forEach(c => {
+                c.image = currentCircle.image;
+            });
+            
+            renderCanvas();
+            alert("底圖已成功套用至本頁面所有圓形！");
+        }
+
+        // ================= 🖨️ 動態 A4 排版列印引擎 =================
+        function printCurrentPage() {
+            const currentPage = project.pages.find(p => p.id === activePageId);
+            const circles = currentPage.circles;
+
+            if (circles.length === 0) {
+                alert("本頁面沒有任何設計物件可供列印！");
+                return;
+            }
+
+            const printArea = document.getElementById('print-area');
+            printArea.innerHTML = ''; // 清空先前的暫存
+
+            // 將物件以每 8 個為一組 (2x4) 進行分頁切塊
+            const chunkSize = 8;
+            for (let i = 0; i < circles.length; i += chunkSize) {
+                const chunk = circles.slice(i, i + chunkSize);
+                
+                // 建立一張獨立的標準 A4 頁面容器
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'print-page';
+
+                chunk.forEach(circle => {
+                    // 重新建構純淨無邊框的 DOM 結構供印表機讀取
+                    const cDiv = document.createElement('div');
+                    cDiv.className = 'circle-obj';
+                    cDiv.style.width = `${circle.diameter}cm`;
+                    cDiv.style.height = `${circle.diameter}cm`;
+                    
+                    const bg = document.createElement('div');
+                    bg.className = 'bg-layer';
+                    bg.style.opacity = circle.bgOpacity / 100;
+                    bg.style.filter = `hue-rotate(${circle.bgHue}deg) saturate(${circle.bgSaturate}%)`;
+                    if (circle.image) bg.style.backgroundImage = `url(${circle.image})`;
+
+                    const txt = document.createElement('div');
+                    txt.className = 'text-overlay';
+                    txt.innerText = circle.text;
+                    txt.style.backgroundColor = `rgba(255, 255, 255, ${circle.textOpacity / 100})`;
+
+                    cDiv.appendChild(bg);
+                    cDiv.appendChild(txt);
+                    pageDiv.appendChild(cDiv);
+                });
+
+                printArea.appendChild(pageDiv);
+            }
+
+            // 觸發系統列印對話框
+            window.print();
+        }
+
+        // ================= 專案 JSON 匯入與匯出 =================
+        function exportProject() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(project));
+            const dlAnchor = document.createElement('a');
+            dlAnchor.setAttribute("href", dataStr);
+            dlAnchor.setAttribute("download", "circles_a4_project.json");
+            document.body.appendChild(dlAnchor);
+            dlAnchor.click();
+            dlAnchor.remove();
+        }
+
+        function importProject(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const imported = JSON.parse(e.target.result);
+                        if (imported.pages && Array.isArray(imported.pages)) {
+                            project = imported;
+                            activePageId = project.pages[0].id;
+                            activeCircleId = null;
+                            renderAll();
+                            alert("專案載入成功！");
+                        } else {
+                            alert("檔案格式不符！");
+                        }
+                    } catch (err) {
+                        alert("JSON 解析失敗，檔案可能已損毀。");
+                    }
+                    event.target.value = '';
+                };
+                reader.readAsText(file);
+            }
+        }
+    </script>
+</body>
+</html>
